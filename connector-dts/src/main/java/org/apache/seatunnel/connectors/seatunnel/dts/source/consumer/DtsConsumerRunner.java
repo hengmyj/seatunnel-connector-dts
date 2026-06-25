@@ -34,7 +34,7 @@ public class DtsConsumerRunner implements AutoCloseable {
     public DtsConsumerRunner(DtsSourceConfig config, DtsRecordQueue queue) {
         this.config = config;
         this.queue = queue;
-        this.converter = new DtsRecordConverter();
+        this.converter = new DtsRecordConverter(config.getTableList());
     }
 
     public void start() {
@@ -74,7 +74,13 @@ public class DtsConsumerRunner implements AutoCloseable {
 
                             DtsRecordConverter.ConvertResult result = converter.convert(record);
                             if (result.isSkipped()) {
-                                filteredCount.incrementAndGet();
+                                long filtered = filteredCount.incrementAndGet();
+                                if (result.shouldCommitSkipped()) {
+                                    record.commit("");
+                                }
+                                if (filtered % 1000 == 0) {
+                                    LOG.info("DTS filtered_tables={}", filtered);
+                                }
                                 return;
                             }
 
@@ -99,10 +105,11 @@ public class DtsConsumerRunner implements AutoCloseable {
         consumer.addRecordListeners(listeners);
         consumer.start();
         LOG.info(
-                "DTS consumer started: sid={}, checkpoint={}, forceCheckpoint={}",
+                "DTS consumer started: sid={}, checkpoint={}, forceCheckpoint={}, tableList={}",
                 config.getSid(),
                 config.getCheckpoint(),
-                config.isForceCheckpoint());
+                config.isForceCheckpoint(),
+                config.getTableList().isEmpty() ? "ALL" : config.getTableList());
     }
 
     public long getCommittedCount() {

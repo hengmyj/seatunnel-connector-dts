@@ -2,7 +2,9 @@ package org.apache.seatunnel.connectors.seatunnel.dts.source.config;
 
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+
+import java.util.Collections;
+import java.util.List;
 
 public class DtsSourceOptions {
 
@@ -52,6 +54,13 @@ public class DtsSourceOptions {
                     .booleanType()
                     .defaultValue(false)
                     .withDescription("Count records only, skip enqueue and commit");
+
+    public static final Option<List<String>> TABLE_LIST =
+            Options.key("table-list")
+                    .listType()
+                    .defaultValue(Collections.emptyList())
+                    .withDescription(
+                            "Table whitelist as db.table entries; empty means all tables");
 
     private DtsSourceOptions() {}
 }

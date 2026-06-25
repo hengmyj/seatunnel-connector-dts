@@ -20,6 +20,9 @@ source {
     max-poll-records = 500
     queue-capacity = 10000
     dry-run = false
+    # 表白名单，格式 db.table；留空或不配置表示订阅全部表
+    # table-list = ["mydb.orders", "mydb.users"]
+    # table-list = "mydb.orders,mydb.users"
   }
 }
 

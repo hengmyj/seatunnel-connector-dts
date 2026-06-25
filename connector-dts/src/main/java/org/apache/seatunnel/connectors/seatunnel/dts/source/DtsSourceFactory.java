@@ -35,7 +35,8 @@ public class DtsSourceFactory implements TableSourceFactory {
                         DtsSourceOptions.FORCE_CHECKPOINT,
                         DtsSourceOptions.MAX_POLL_RECORDS,
                         DtsSourceOptions.QUEUE_CAPACITY,
-                        DtsSourceOptions.DRY_RUN)
+                        DtsSourceOptions.DRY_RUN,
+                        DtsSourceOptions.TABLE_LIST)
                 .build();
     }
 

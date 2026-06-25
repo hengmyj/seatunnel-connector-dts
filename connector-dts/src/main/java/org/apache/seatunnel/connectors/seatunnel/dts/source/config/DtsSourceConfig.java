@@ -3,6 +3,11 @@ package org.apache.seatunnel.connectors.seatunnel.dts.source.config;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public class DtsSourceConfig implements Serializable {
 
@@ -18,6 +23,7 @@ public class DtsSourceConfig implements Serializable {
     private final int maxPollRecords;
     private final int queueCapacity;
     private final boolean dryRun;
+    private final Set<String> tableList;
 
     public DtsSourceConfig(ReadonlyConfig config) {
         this.brokerUrl = config.get(DtsSourceOptions.BROKER_URL);
@@ -30,6 +36,25 @@ public class DtsSourceConfig implements Serializable {
         this.maxPollRecords = config.get(DtsSourceOptions.MAX_POLL_RECORDS);
         this.queueCapacity = config.get(DtsSourceOptions.QUEUE_CAPACITY);
         this.dryRun = config.get(DtsSourceOptions.DRY_RUN);
+        this.tableList = normalizeTableList(config.get(DtsSourceOptions.TABLE_LIST));
+    }
+
+    private static Set<String> normalizeTableList(List<String> rawList) {
+        if (rawList == null || rawList.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<String> normalized = new HashSet<>();
+        for (String entry : rawList) {
+            if (entry == null) {
+                continue;
+            }
+            String trimmed = entry.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            normalized.add(trimmed.toLowerCase(Locale.ROOT));
+        }
+        return normalized.isEmpty() ? Collections.emptySet() : normalized;
     }
 
     public String getBrokerUrl() {
@@ -70,5 +95,9 @@ public class DtsSourceConfig implements Serializable {
 
     public boolean isDryRun() {
         return dryRun;
+    }
+
+    public Set<String> getTableList() {
+        return tableList;
     }
 }
