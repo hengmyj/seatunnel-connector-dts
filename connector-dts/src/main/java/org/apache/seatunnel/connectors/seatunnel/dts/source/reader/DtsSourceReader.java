@@ -18,18 +18,18 @@ public class DtsSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
     private static final long POLL_TIMEOUT_MS = 100L;
 
     private final DtsSourceConfig config;
-    private final DtsRecordQueue queue;
+    private DtsRecordQueue queue;
     private DtsConsumerRunner consumerRunner;
     private volatile long lastSourceTimestamp;
     private volatile long lastOffset;
 
-    public DtsSourceReader(DtsSourceConfig config, DtsRecordQueue queue) {
+    public DtsSourceReader(DtsSourceConfig config) {
         this.config = config;
-        this.queue = queue;
     }
 
     @Override
     public void open() throws Exception {
+        queue = new DtsRecordQueue(config.getQueueCapacity());
         consumerRunner = new DtsConsumerRunner(config, queue);
         consumerRunner.start();
         LOG.info("DtsSourceReader opened");

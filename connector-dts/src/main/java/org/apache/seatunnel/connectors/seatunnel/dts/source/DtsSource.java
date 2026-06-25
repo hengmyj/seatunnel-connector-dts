@@ -14,7 +14,6 @@ import org.apache.seatunnel.connectors.seatunnel.common.source.AbstractSingleSpl
 import org.apache.seatunnel.connectors.seatunnel.common.source.SingleSplitReaderContext;
 import org.apache.seatunnel.connectors.seatunnel.dts.source.config.DtsSourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.dts.source.config.DtsSourceOptions;
-import org.apache.seatunnel.connectors.seatunnel.dts.source.consumer.DtsRecordQueue;
 import org.apache.seatunnel.connectors.seatunnel.dts.source.reader.DtsSourceReader;
 
 import java.util.Collections;
@@ -24,11 +23,9 @@ public class DtsSource extends AbstractSingleSplitSource<SeaTunnelRow> {
 
     private final DtsSourceConfig config;
     private final CatalogTable catalogTable;
-    private final DtsRecordQueue queue;
 
     public DtsSource(ReadonlyConfig pluginConfig) {
         this.config = new DtsSourceConfig(pluginConfig);
-        this.queue = new DtsRecordQueue(config.getQueueCapacity());
         SeaTunnelRowType rowType =
                 new SeaTunnelRowType(
                         new String[] {
@@ -73,6 +70,6 @@ public class DtsSource extends AbstractSingleSplitSource<SeaTunnelRow> {
     @Override
     public AbstractSingleSplitReader<SeaTunnelRow> createReader(SingleSplitReaderContext readerContext)
             throws Exception {
-        return new DtsSourceReader(config, queue);
+        return new DtsSourceReader(config);
     }
 }
