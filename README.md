@@ -27,9 +27,72 @@
 | JDK | 8 或 11 |
 | Maven | 3.6+ |
 | SeaTunnel | `~/Documents/flash/seatunnel/apache-seatunnel-2.3.13/` |
-| DTS SDK | `~/Documents/flash/seatunnel/dts-bridge/dts-sdk.jar`（构建时自动拷贝） |
+| DTS SDK | `dts-sdk.jar` 须单独部署，见下文 [dts-sdk.jar 安装](#dts-sdkjar-安装) |
 | DTS 凭证 | 参考 `dts-bridge/config.properties` 或 `config.properties.example` |
 | 网络 | 可访问 DTS broker（`:18001`） |
+
+## dts-sdk.jar 安装
+
+### 什么是 dts-sdk.jar
+
+- 阿里云 DTS **订阅**官方 Java SDK（`DefaultDTSConsumer` 等），**非本仓库编译产物**
+- 从阿里云 DTS 控制台获取：订阅任务 → Kafka 客户端 demo / 订阅 SDK 下载
+- 官方文档：[使用 Kafka 客户端消费订阅数据](https://help.aliyun.com/zh/dts/user-guide/use-a-kafka-client-to-consume-tracked-data-2)
+- 示例代码参考：[silly-fofo/subscribe_example](https://github.com/silly-fofo/subscribe_example)
+
+### 为何与 connector jar 分离
+
+| 原因 | 说明 |
+|------|------|
+| 许可 | 专有组件，**不能**打入 connector fat jar |
+| SeaTunnel 插件隔离 | SDK 须放在 `plugins/connector-dts/dts-sdk.jar`，由插件 classloader 加载 |
+| plugin-mapping | `seatunnel.source.Dts = connector-dts`（子目录名 `connector-dts` 须与 mapping 值一致） |
+
+### 如何获取
+
+1. **阿里云 DTS 控制台** — 订阅任务页面下载 Kafka 客户端 demo / 订阅 SDK（推荐首次获取）
+2. **本仓库** — 复制 `~/Documents/flash/seatunnel/dts-bridge/dts-sdk.jar`（开发机通常已有）
+3. **无法从 Maven Central 下载** — `pom.xml` 中 `dts-sdk` 为 `system` scope，仅编译期引用
+
+### 安装步骤
+
+**本地开发（Mac / 本机 SeaTunnel）**
+
+```bash
+cd ~/Documents/flash/seatunnel/seatunnel-connector-dts
+sh build.sh   # 自动从 ../dts-bridge/dts-sdk.jar 拷贝到 plugins/connector-dts/
+```
+
+**远程 / 新机器**
+
+```bash
+# 1. 将 dts-sdk.jar 传到目标机
+scp ~/Documents/flash/seatunnel/dts-bridge/dts-sdk.jar user@host:/tmp/
+
+# 2. 一键部署（推荐）
+cd ~/Documents/flash/seatunnel
+DTS_SDK_JAR=/tmp/dts-sdk.jar sh scripts/deploy-seatunnel-dts.sh
+
+# 或手动放置
+mkdir -p /path/to/apache-seatunnel-2.3.13/plugins/connector-dts
+cp /tmp/dts-sdk.jar /path/to/apache-seatunnel-2.3.13/plugins/connector-dts/dts-sdk.jar
+```
+
+**验证**
+
+```bash
+ls -lh plugins/connector-dts/dts-sdk.jar   # 约 17MB，非空
+```
+
+须同时存在：`connectors/connector-dts-2.3.13.jar` + `plugins/connector-dts/dts-sdk.jar` + `plugin-mapping.properties` 中的 `seatunnel.source.Dts = connector-dts`。
+
+### 故障排查
+
+| 现象 | 原因与处理 |
+|------|-----------|
+| `NoClassDefFoundError: com/aliyun/dts/subscribe/clients/ConsumerContext` | 缺少 `plugins/connector-dts/dts-sdk.jar`；按上文安装后重启作业 |
+| `build.sh` 报 `missing DTS SDK` | 开发机 `dts-bridge/dts-sdk.jar` 不存在；从控制台下载或从其他机器拷贝 |
+| 远程仅拷贝了 `connector-dts-*.jar` | connector jar 不含 SDK 类，必须单独部署 `dts-sdk.jar` |
 
 ## 项目结构
 
@@ -63,15 +126,14 @@ apache-seatunnel-2.3.13/
 
 ## 远程 / 新机器部署
 
-使用顶层部署脚本一键下载 SeaTunnel、注册 DTS 插件并生成配置模板：
+使用顶层部署脚本一键下载 SeaTunnel、注册 DTS 插件并生成配置模板（**须自备 `dts-sdk.jar`**，见 [dts-sdk.jar 安装](#dts-sdkjar-安装)）：
 
 ```bash
 cd ~/Documents/flash/seatunnel
-# 将 dts-sdk.jar 放在 dts-bridge/ 或通过环境变量指定
-sh scripts/deploy-seatunnel-dts.sh
+DTS_SDK_JAR=~/dts-sdk.jar sh scripts/deploy-seatunnel-dts.sh
 ```
 
-常用环境变量：`INSTALL_DIR`（安装路径）、`SKIP_DOWNLOAD=true`（仅更新插件）、`DTS_SDK_JAR`（SDK 路径，**必填**若不在默认位置）、`BUILD_CONNECTOR=no` + `CONNECTOR_JAR`（使用预编译 jar）。详见脚本头部注释。
+常用环境变量：`INSTALL_DIR`（安装路径）、`SKIP_DOWNLOAD=true`（仅更新插件）、`DTS_SDK_JAR`（SDK 路径，**必填**若不在 `dts-bridge/` 默认位置）、`BUILD_CONNECTOR=no` + `CONNECTOR_JAR`（使用预编译 jar）。详见 `scripts/deploy-seatunnel-dts.sh` 头部注释。
 
 ## 构建
 
@@ -218,22 +280,10 @@ sink {
 ## 常见问题
 
 **Q: 运行时报 `NoClassDefFoundError: com/aliyun/dts/subscribe/clients/ConsumerContext`？**  
-A: DTS SDK 未被插件 classloader 加载。connector 主 jar 在 `connectors/`，**SDK 必须单独放在** `plugins/connector-dts/dts-sdk.jar`（子目录名须与 `plugin-mapping.properties` 中 `seatunnel.source.Dts = connector-dts` 的值一致，见 `apache-seatunnel-2.3.13/plugins/README.md`）。仅拷贝 `connector-dts-*.jar` 到远程而不部署 SDK 会触发此错误。
-
-```bash
-# 在 SeaTunnel 安装目录下验证
-ls plugins/connector-dts/dts-sdk.jar
-```
-
-修复：在开发机执行 `sh build.sh`，或在目标机执行 `sh scripts/deploy-seatunnel-dts.sh`（需自备 `dts-sdk.jar`），或手动：
-
-```bash
-mkdir -p plugins/connector-dts
-cp /path/to/dts-sdk.jar plugins/connector-dts/dts-sdk.jar
-```
+A: 缺少 `dts-sdk.jar`。见上文 [dts-sdk.jar 安装](#dts-sdkjar-安装) — 仅拷贝 `connector-dts-*.jar` 到远程而不部署 SDK 会触发此错误。
 
 **Q: 启动报找不到 Dts 插件？**  
-A: 先执行 `sh build.sh`，确认 `connectors/connector-dts-2.3.13.jar` 和 `plugins/connector-dts/dts-sdk.jar` 存在，且 `plugin-mapping.properties` 含 `seatunnel.source.Dts = connector-dts`。
+A: 先执行 `sh build.sh`（或远程 `deploy-seatunnel-dts.sh`），确认 `connectors/connector-dts-2.3.13.jar`、`plugins/connector-dts/dts-sdk.jar` 均存在，且 `plugin-mapping.properties` 含 `seatunnel.source.Dts = connector-dts`。
 
 **Q: 认证失败 / CheckResult{isOk=false}？**  
 A: 检查 `user`/`password`/`sid`/`topic`；DTS SASL 用户名格式为 `{user}-{consumer.group}`。
