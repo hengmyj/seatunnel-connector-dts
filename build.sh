@@ -13,9 +13,22 @@ mvn -q package -DskipTests
 echo "[build] deploy jar -> $SEATUNNEL_HOME/connectors/$ARTIFACT"
 cp "connector-dts/target/${ARTIFACT}" "$SEATUNNEL_HOME/connectors/"
 
+SDK_SRC="$SCRIPT_DIR/../dts-bridge/dts-sdk.jar"
+SDK_DEST="$SEATUNNEL_HOME/plugins/connector-dts/dts-sdk.jar"
+if [ ! -f "$SDK_SRC" ]; then
+  echo "[build] ERROR: missing DTS SDK: $SDK_SRC"
+  echo "[build] Copy from dev machine dts-bridge/ or set path; SDK cannot be downloaded from public Maven."
+  exit 1
+fi
+
 echo "[build] deploy dts-sdk.jar -> plugins/connector-dts/"
 mkdir -p "$SEATUNNEL_HOME/plugins/connector-dts"
-cp "$SCRIPT_DIR/../dts-bridge/dts-sdk.jar" "$SEATUNNEL_HOME/plugins/connector-dts/"
+cp "$SDK_SRC" "$SDK_DEST"
+if [ ! -s "$SDK_DEST" ]; then
+  echo "[build] ERROR: deploy failed — $SDK_DEST missing or empty"
+  exit 1
+fi
+echo "[build] verified: $SDK_DEST"
 
 MAPPING_FILE="$SEATUNNEL_HOME/connectors/plugin-mapping.properties"
 if ! grep -q '^seatunnel.source.Dts' "$MAPPING_FILE"; then

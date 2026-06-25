@@ -61,6 +61,18 @@ apache-seatunnel-2.3.13/
         └── dts-sdk.jar              # SDK 隔离加载（许可禁止打入 fat jar）
 ```
 
+## 远程 / 新机器部署
+
+使用顶层部署脚本一键下载 SeaTunnel、注册 DTS 插件并生成配置模板：
+
+```bash
+cd ~/Documents/flash/seatunnel
+# 将 dts-sdk.jar 放在 dts-bridge/ 或通过环境变量指定
+sh scripts/deploy-seatunnel-dts.sh
+```
+
+常用环境变量：`INSTALL_DIR`（安装路径）、`SKIP_DOWNLOAD=true`（仅更新插件）、`DTS_SDK_JAR`（SDK 路径，**必填**若不在默认位置）、`BUILD_CONNECTOR=no` + `CONNECTOR_JAR`（使用预编译 jar）。详见脚本头部注释。
+
 ## 构建
 
 ```bash
@@ -204,6 +216,21 @@ sink {
 - 仅提交 `*.example` 模板和源码，**勿提交密码**
 
 ## 常见问题
+
+**Q: 运行时报 `NoClassDefFoundError: com/aliyun/dts/subscribe/clients/ConsumerContext`？**  
+A: DTS SDK 未被插件 classloader 加载。connector 主 jar 在 `connectors/`，**SDK 必须单独放在** `plugins/connector-dts/dts-sdk.jar`（子目录名须与 `plugin-mapping.properties` 中 `seatunnel.source.Dts = connector-dts` 的值一致，见 `apache-seatunnel-2.3.13/plugins/README.md`）。仅拷贝 `connector-dts-*.jar` 到远程而不部署 SDK 会触发此错误。
+
+```bash
+# 在 SeaTunnel 安装目录下验证
+ls plugins/connector-dts/dts-sdk.jar
+```
+
+修复：在开发机执行 `sh build.sh`，或在目标机执行 `sh scripts/deploy-seatunnel-dts.sh`（需自备 `dts-sdk.jar`），或手动：
+
+```bash
+mkdir -p plugins/connector-dts
+cp /path/to/dts-sdk.jar plugins/connector-dts/dts-sdk.jar
+```
 
 **Q: 启动报找不到 Dts 插件？**  
 A: 先执行 `sh build.sh`，确认 `connectors/connector-dts-2.3.13.jar` 和 `plugins/connector-dts/dts-sdk.jar` 存在，且 `plugin-mapping.properties` 含 `seatunnel.source.Dts = connector-dts`。
