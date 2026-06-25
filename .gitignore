@@ -1,0 +1,8 @@
+target/
+*.class
+.idea/
+*.iml
+.DS_Store
+config/dts-to-console.conf
+config/dts-to-mysql.conf
+localCheckpointStore-*

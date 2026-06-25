@@ -1,0 +1,28 @@
+#
+# DTS Source -> Console (template — copy to dts-to-console.conf with real credentials)
+#
+
+env {
+  job.mode = "STREAMING"
+  checkpoint.interval = 10000
+  parallelism = 1
+}
+
+source {
+  Dts {
+    broker-url = "dts-ap-southeast-1.aliyuncs.com:18001"
+    topic = "your_dts_topic"
+    sid = "your_sid"
+    user = "your_user"
+    password = "your_password"
+    checkpoint = "0"
+    force-checkpoint = false
+    max-poll-records = 500
+    queue-capacity = 10000
+    dry-run = false
+  }
+}
+
+sink {
+  Console {}
+}
