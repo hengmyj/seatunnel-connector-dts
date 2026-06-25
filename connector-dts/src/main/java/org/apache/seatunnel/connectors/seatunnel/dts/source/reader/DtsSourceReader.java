@@ -45,22 +45,26 @@ public class DtsSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
 
     @Override
     public void pollNext(Collector<SeaTunnelRow> output) throws Exception {
-        SeaTunnelRow row = queue.poll(POLL_TIMEOUT_MS);
-        if (row == null) {
-            return;
-        }
-        synchronized (output.getCheckpointLock()) {
-            output.collect(row);
-            if (row.getArity() >= 5) {
-                Object ts = row.getField(3);
-                Object offset = row.getField(4);
-                if (ts instanceof Number) {
-                    lastSourceTimestamp = ((Number) ts).longValue();
-                }
-                if (offset instanceof Number) {
-                    lastOffset = ((Number) offset).longValue();
+        int drained = 0;
+        while (drained < 500) {
+            SeaTunnelRow row = queue.poll(drained == 0 ? POLL_TIMEOUT_MS : 0);
+            if (row == null) {
+                break;
+            }
+            synchronized (output.getCheckpointLock()) {
+                output.collect(row);
+                if (row.getArity() >= 5) {
+                    Object ts = row.getField(3);
+                    Object offset = row.getField(4);
+                    if (ts instanceof Number) {
+                        lastSourceTimestamp = ((Number) ts).longValue();
+                    }
+                    if (offset instanceof Number) {
+                        lastOffset = ((Number) offset).longValue();
+                    }
                 }
             }
+            drained++;
         }
     }
 
