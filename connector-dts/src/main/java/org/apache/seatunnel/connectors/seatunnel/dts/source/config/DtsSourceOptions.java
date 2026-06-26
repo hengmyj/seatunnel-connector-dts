@@ -53,14 +53,34 @@ public class DtsSourceOptions {
             Options.key("dry-run")
                     .booleanType()
                     .defaultValue(false)
-                    .withDescription("Count records only, skip enqueue and commit");
+                    .withDescription(
+                            "跳过 DtsRecordConverter，仅计数并 commit（约 11 万 rps 测速；无法做 table-list 过滤）");
+
+    public static final Option<Boolean> SKIP_COLUMNS_JSON =
+            Options.key("skip-columns-json")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "白名单内 DML 的 _columns_json 输出为空 {}；table-list 过滤仍生效（Console 测速用）");
+
+    public static final Option<Integer> POLL_BATCH_SIZE =
+            Options.key("poll-batch-size")
+                    .intType()
+                    .defaultValue(2000)
+                    .withDescription("Max rows drained per pollNext call");
 
     public static final Option<List<String>> TABLE_LIST =
             Options.key("table-list")
                     .listType()
                     .defaultValue(Collections.emptyList())
                     .withDescription(
-                            "Table whitelist as db.table entries; empty means all tables");
+                            "表白名单 db.table（小写）；未命中 DML 走 skipAndCommit，不构建 _columns_json；空表示全部表");
+
+    public static final Option<Integer> MAX_COLUMN_JSON_LENGTH =
+            Options.key("max-column-json-length")
+                    .intType()
+                    .defaultValue(262144)
+                    .withDescription("_columns_json 单列最大字符数，超出截断；0 表示不截断");
 
     private DtsSourceOptions() {}
 }

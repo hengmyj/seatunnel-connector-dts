@@ -23,6 +23,9 @@ public class DtsSourceConfig implements Serializable {
     private final int maxPollRecords;
     private final int queueCapacity;
     private final boolean dryRun;
+    private final boolean skipColumnsJson;
+    private final int maxColumnJsonLength;
+    private final int pollBatchSize;
     private final Set<String> tableList;
 
     public DtsSourceConfig(ReadonlyConfig config) {
@@ -36,6 +39,9 @@ public class DtsSourceConfig implements Serializable {
         this.maxPollRecords = config.get(DtsSourceOptions.MAX_POLL_RECORDS);
         this.queueCapacity = config.get(DtsSourceOptions.QUEUE_CAPACITY);
         this.dryRun = config.get(DtsSourceOptions.DRY_RUN);
+        this.skipColumnsJson = config.get(DtsSourceOptions.SKIP_COLUMNS_JSON);
+        this.maxColumnJsonLength = config.get(DtsSourceOptions.MAX_COLUMN_JSON_LENGTH);
+        this.pollBatchSize = config.get(DtsSourceOptions.POLL_BATCH_SIZE);
         this.tableList = normalizeTableList(config.get(DtsSourceOptions.TABLE_LIST));
     }
 
@@ -95,6 +101,18 @@ public class DtsSourceConfig implements Serializable {
 
     public boolean isDryRun() {
         return dryRun;
+    }
+
+    public boolean isSkipColumnsJson() {
+        return skipColumnsJson;
+    }
+
+    public int getMaxColumnJsonLength() {
+        return maxColumnJsonLength;
+    }
+
+    public int getPollBatchSize() {
+        return pollBatchSize;
     }
 
     public Set<String> getTableList() {

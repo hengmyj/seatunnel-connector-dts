@@ -46,7 +46,8 @@ public class DtsSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
     @Override
     public void pollNext(Collector<SeaTunnelRow> output) throws Exception {
         int drained = 0;
-        while (drained < 500) {
+        int batchSize = config.getPollBatchSize();
+        while (drained < batchSize) {
             SeaTunnelRow row = queue.poll(drained == 0 ? POLL_TIMEOUT_MS : 0);
             if (row == null) {
                 break;

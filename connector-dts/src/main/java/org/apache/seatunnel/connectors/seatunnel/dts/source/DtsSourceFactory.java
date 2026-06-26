@@ -36,6 +36,9 @@ public class DtsSourceFactory implements TableSourceFactory {
                         DtsSourceOptions.MAX_POLL_RECORDS,
                         DtsSourceOptions.QUEUE_CAPACITY,
                         DtsSourceOptions.DRY_RUN,
+                        DtsSourceOptions.SKIP_COLUMNS_JSON,
+                        DtsSourceOptions.MAX_COLUMN_JSON_LENGTH,
+                        DtsSourceOptions.POLL_BATCH_SIZE,
                         DtsSourceOptions.TABLE_LIST)
                 .build();
     }

@@ -189,7 +189,7 @@ cp config/dts-to-console.conf.example config/dts-to-console.conf
 | `max-poll-records` | 否 | `500` | Kafka `max.poll.records`，调大可提高吞吐 |
 | `queue-capacity` | 否 | `10000` | SDK 回调与 Reader 之间有界队列容量 |
 | `table-list` | 否 | 空（全部表） | 表白名单，`db.table` 格式；支持 HOCON 数组或逗号分隔字符串 |
-| `dry-run` | 否 | `false` | 仅计数，不入队、不 commit（测速用） |
+| `dry-run` | 否 | `false` | 仅计数并 commit，跳过 convert/入队/JSON（测速用；**无法**做 table-list 过滤） |
 
 ### table-list 示例
 
@@ -298,7 +298,7 @@ A: 确认 `force-checkpoint=true`、已删除 `localCheckpointStore-{sid}`、作
 A: 调大 `queue-capacity` 或 `max-poll-records`；确认下游 Sink 无背压。
 
 **Q: dry-run 与正式运行的区别？**  
-A: `dry-run=true` 只计数不 commit，位点不前进，仅用于连通性与吞吐测试。
+A: `dry-run=true` 跳过 `DtsRecordConverter`，只计数并 `commit` 推进位点，不入队、不读表名、不序列化 JSON，适合测 SDK 纯消费吞吐（如 11w+ rps）。要做 `table-list` 过滤须 `dry-run=false`；可配合 `skip-columns-json=true` 降低列 JSON 开销。
 
 ## 参考
 

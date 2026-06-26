@@ -17,6 +17,10 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * 在后台线程运行 {@link DefaultDTSConsumer}；SDK 回调中转换记录并写入有界队列，供 {@link
+ * org.apache.seatunnel.connectors.seatunnel.dts.source.reader.DtsSourceReader} 拉取。
+ */
 public class DtsConsumerRunner implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(DtsConsumerRunner.class);
@@ -34,7 +38,11 @@ public class DtsConsumerRunner implements AutoCloseable {
     public DtsConsumerRunner(DtsSourceConfig config, DtsRecordQueue queue) {
         this.config = config;
         this.queue = queue;
-        this.converter = new DtsRecordConverter(config.getTableList());
+        this.converter =
+                new DtsRecordConverter(
+                        config.getTableList(),
+                        config.isSkipColumnsJson(),
+                        config.getMaxColumnJsonLength());
     }
 
     public void start() {
@@ -68,7 +76,9 @@ public class DtsConsumerRunner implements AutoCloseable {
                         }
                         try {
                             if (config.isDryRun()) {
+                                // 跳过整个 convert（无 table-list、无 JSON），仍 commit 推进位点。
                                 dryRunCount.incrementAndGet();
+                                record.commit("");
                                 return;
                             }
 
@@ -78,6 +88,7 @@ public class DtsConsumerRunner implements AutoCloseable {
                                 if (result.shouldCommitSkipped()) {
                                     record.commit("");
                                 }
+                                // skip() 路径（DDL 等）：此处不 commit。
                                 if (filtered % 1000 == 0) {
                                     LOG.info("DTS filtered_tables={}", filtered);
                                 }
@@ -85,8 +96,8 @@ public class DtsConsumerRunner implements AutoCloseable {
                             }
 
                             SeaTunnelRow row = result.getRow();
-                            queue.put(row);
-                            record.commit("");
+                            queue.put(row); // 队列满时阻塞，对 SDK 形成背压
+                            record.commit(""); // 入队成功后再 commit
                             long count = committedCount.incrementAndGet();
                             if (count % 1000 == 0) {
                                 LOG.info(
