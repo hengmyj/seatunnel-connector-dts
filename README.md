@@ -237,6 +237,61 @@ table-list = ["mydb.orders", "mydb.users"]
 
 白名单外的 DML 事件会被跳过且不输出，但会 `commit` 以推进位点，避免卡在非目标表上。
 
+## 性能 / 吞吐参考
+
+> 以下数字来自本地/联调历史与用户测速反馈，**不是**正式压测报告；环境、订阅内容、下游 Sink 不同时结果会差一个数量级。
+
+### 消费速度取决于
+
+| 因素 | 说明（有历史验证） |
+|------|-------------------|
+| **`dry-run`** | `true`：跳过 convert / 入队 / `_columns_json`，只计数并 `commit`，测 SDK 纯消费上限；`false` 才走表名过滤与真实输出 |
+| **是否构建 `_columns_json`** | 宽表 / 大字段序列化是 DML 主开销；`skip-columns-json=true` 可测「不过列 JSON」路径（测速用） |
+| **`table-list` 过滤比例** | 白名单外只读库表名后 `skipAndCommit`，不做列 JSON；过滤越多，有效下游行越少、CPU 越省 |
+| **下游 Sink** | Console 打印大 JSON 会严重拖慢；真实 Jdbc 等 Sink 才能代表业务吞吐 |
+| **JVM 堆** | 默认 `jvm_client_options` 约 `-Xmx512m` 易 OOM；生产建议 `-Xmx4g`（或等价 `JvmOption`） |
+| **队列与背压** | connector `queue-capacity`（默认 10000）满则 SDK 回调阻塞；SDK 内部队列上限约 **512**，下游慢 / DDL 段 `skip` 不 `commit` 时易顶满 |
+| **同一 `sid`** | 同一消费组同时只能一个消费者；本地与生产抢同一 `sid` 会互相拖慢或抢位点 |
+| **机器规格 / 网络** | CPU、堆、到 DTS broker 的网络都会影响峰值；订阅内心跳/非 DML 比例也会让 `inRps` 与有效行数差很多 |
+
+### 指标怎么读（勿混用）
+
+| 指标 | 含义 | 能否当「下游吞吐」 |
+|------|------|-------------------|
+| SDK **`inRps`** | Kafka 拉取进入 SDK 管道的速率（含心跳等） | 否 |
+| SDK **`outRps`** | 调用了 `record.commit()` 的速率（含白名单外 skipAndCommit） | 否（接近「位点推进」而非 Sink 写出） |
+| 日志 **`DTS committed N`** / SeaTunnel Read Count | Source 成功处理并交给引擎的行数 | 接近 Source 侧有效吞吐 |
+| Sink 写出 / 目标库入库 | 真实下游 | **是**（生产应以这项为准） |
+
+高 `inRps`、低 `outRps` 在非 DML 占比高时属正常；Console + 全量 `_columns_json` 时 `outRps` 只有百级也常见，不代表「SDK 只拉了几百条」。
+
+### 历史测速摘要
+
+| 场景 | 量级 | 条件 / 备注 |
+|------|------|-------------|
+| connector **`dry-run=true`** | 约 **11 万+** rps（用户测速）；控制台峰值约 **109k** rps | 跳过 convert/JSON/入队，仍 `commit`；测 SDK 消费上限，**无表过滤、无真实下游行** |
+| dts-bridge 空跑优化后 | SDK `inRps` 约 **7–8 万** | 跳过无客户端 JSON；与 connector dry-run 同属「轻处理」上限参考 |
+| connector 正式路径 + Console | `inRps` 约 **1.5–1.6 万**，`outRps` 约 **百级** | `dry-run=false` + 全量 `_columns_json`；多数非 DML 不 commit |
+| 默认堆 / 无白名单 | 易 OOM、队列顶满后位点停 | `-Xmx512m` + 大字段 JSON；SDK 线程挂掉后引擎仍可能继续 checkpoint |
+
+### 参考配置结论（用户口径）
+
+- **约 4C 规格下，消费可达 10W+ 下游**（规划/容量口径）。
+- **已验证的同量级证据**：`dry-run=true` 测速约 **11w+** rps（含控制台峰值 ~109k）。该数字是 **SDK 轻路径 commit 上限**，不是「Jdbc 全量列同步已稳定 10W+」的压测结论。
+- 生产要接近该量级，需同时满足：足够 CPU（约 4C 量级）、`-Xmx4g` 级堆、合理 `table-list` / 控制台缩订阅、避免与生产抢同一 `sid`、下游 Sink 跟得上；并关掉测速开关（`dry-run=false`，生产勿长期 `skip-columns-json=true`）。
+
+测速建议：
+
+```hocon
+# 纯 SDK 上限（无表过滤、无下游有效行）
+dry-run = true
+
+# 要 table-list + 仍测转换路径（不做列 JSON）
+dry-run = false
+skip-columns-json = true
+table-list = ["mydb.target_table"]
+```
+
 ## 运行
 
 ```bash
