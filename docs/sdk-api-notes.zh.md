@@ -1,5 +1,7 @@
 # DTS SDK API 笔记（Phase 0）
 
+业务动机与方案价值见 [README · 为什么需要（实际意义）](../README.md#为什么需要实际意义)。
+
 基于本地 `../dts-bridge/dts-sdk.jar`，通过 `jar tf` + `javap` 探测整理。
 
 ## SDK 来源与放置
