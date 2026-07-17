@@ -132,7 +132,9 @@ seatunnel-connector-dts/          # 顶层独立 Maven 工程（本地 git 仓�
 ├── config/
 │   ├── dts-to-console.conf.example   # 配置模板（可提交）
 │   └── dts-to-console.conf           # 本地凭证（gitignore，勿提交）
-└── docs/sdk-api-notes.md
+└── docs/
+    ├── sdk-api-notes.md      # SDK API 笔记（英文）
+    └── sdk-api-notes.zh.md   # SDK API 笔记（中文）
 ```
 
 部署目标（`build.sh` 自动写入）：
@@ -328,7 +330,8 @@ A: `dry-run=true` 跳过 `DtsRecordConverter`，只计数并 `commit` 推进位�
 ## 参考
 
 - [实施计划](../docs/plans/2026-06-25-dts-seatunnel-connector.md)
-- [SDK API 笔记](docs/sdk-api-notes.md)
+- [SDK API 笔记（英文）](docs/sdk-api-notes.md)
+- [SDK API 笔记（中文）](docs/sdk-api-notes.zh.md)
 - [dts-bridge README](../dts-bridge/README.md)（凭证与 checkpoint 参考）
 - [aliyun-dts-subscribe-sdk-java](https://github.com/aliyun/aliyun-dts-subscribe-sdk-java)
 - [dts-new-subscribe-sdk (Maven)](https://central.sonatype.com/artifact/com.aliyun.dts/dts-new-subscribe-sdk)
