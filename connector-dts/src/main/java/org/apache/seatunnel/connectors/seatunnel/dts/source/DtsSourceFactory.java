@@ -13,6 +13,9 @@ import org.apache.seatunnel.connectors.seatunnel.dts.source.config.DtsSourceOpti
 
 import java.io.Serializable;
 
+/**
+ * SPI 工厂：通过 {@link AutoService} 注册，使 SeaTunnel 能按插件名 {@code Dts} 发现本 Source。
+ */
 @AutoService(Factory.class)
 public class DtsSourceFactory implements TableSourceFactory {
 

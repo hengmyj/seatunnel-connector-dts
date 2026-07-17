@@ -9,6 +9,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * 从 {@link ReadonlyConfig} 解析出的不可变运行时配置。
+ *
+ * <p>{@code table-list} 在构造时归一化为小写 {@code db.table} 集合，供 {@link
+ * org.apache.seatunnel.connectors.seatunnel.dts.source.convert.DtsRecordConverter} 过滤使用。
+ */
 public class DtsSourceConfig implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -45,6 +51,7 @@ public class DtsSourceConfig implements Serializable {
         this.tableList = normalizeTableList(config.get(DtsSourceOptions.TABLE_LIST));
     }
 
+    /** trim + 小写；空条目丢弃。空集合表示不过滤。 */
     private static Set<String> normalizeTableList(List<String> rawList) {
         if (rawList == null || rawList.isEmpty()) {
             return Collections.emptySet();

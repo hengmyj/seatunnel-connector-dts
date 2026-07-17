@@ -4,6 +4,12 @@ import com.aliyun.dts.subscribe.clients.record.RecordSchema;
 import com.aliyun.dts.subscribe.clients.record.RowImage;
 import com.aliyun.dts.subscribe.clients.record.value.Value;
 
+/**
+ * DTS {@link Value} / {@link RowImage} 到 Java / JSON 的映射工具。
+ *
+ * <p>列类型以 SDK {@code Value#toString()} 文本推断（先 long、再 double、再 boolean，否则当字符串），
+ * 与强类型 schema 映射不同；大字段场景必须走 {@link #escapeJson} 的单次扫描实现。
+ */
 public final class DtsValueMapper {
 
     private DtsValueMapper() {}

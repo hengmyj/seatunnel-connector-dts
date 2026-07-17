@@ -20,6 +20,10 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * 在后台线程运行 {@link DefaultDTSConsumer}；SDK 回调中转换记录并写入有界队列，供 {@link
  * org.apache.seatunnel.connectors.seatunnel.dts.source.reader.DtsSourceReader} 拉取。
+ *
+ * <p>订阅模式固定 {@link ConsumerContext.ConsumerSubscribeMode#ASSIGN}。{@code record.commit()}
+ * 必须在 {@code queue.put} 成功之后调用，否则背压失效且可能丢未入队数据。DDL 等 {@code skip()}
+ * 路径故意不 commit——大量 DDL 段可能把 SDK 内部队列堵到约 512。
  */
 public class DtsConsumerRunner implements AutoCloseable {
 
@@ -60,6 +64,7 @@ public class DtsConsumerRunner implements AutoCloseable {
                         config.getCheckpoint(),
                         ConsumerContext.ConsumerSubscribeMode.ASSIGN,
                         kafkaProps);
+        // 强制位点：配合删 localCheckpointStore-{sid} 使用；控制台显示的是已提交位点，不代表本次 seek 目标。
         if (config.isForceCheckpoint()) {
             ctx.setForceUseCheckpoint(true);
         }
@@ -127,6 +132,10 @@ public class DtsConsumerRunner implements AutoCloseable {
         return committedCount.get();
     }
 
+    /**
+     * 历史兼容：实际返回的是已 commit 条数，不是 DTS offset。Reader 快照位点取自行字段 {@code
+     * _offset}。
+     */
     public long getLastOffset() {
         return committedCount.get();
     }

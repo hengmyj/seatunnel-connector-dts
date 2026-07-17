@@ -14,6 +14,13 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * 将 DTS SDK {@link DefaultUserRecord} 转为信封行 {@link SeaTunnelRow}。
+ *
+ * <p>仅输出 INSERT/UPDATE/DELETE；DDL 与其它操作类型走 {@link ConvertResult#skip()}（不
+ * commit）。表白名单未命中走 {@link ConvertResult#skipAndCommit()}，避免位点卡住同时跳过昂贵的列
+ * JSON 构建。
+ */
 public class DtsRecordConverter {
 
     private static final Logger LOG = LoggerFactory.getLogger(DtsRecordConverter.class);
@@ -74,6 +81,7 @@ public class DtsRecordConverter {
             return ConvertResult.skipAndCommit();
         }
 
+        // INSERT/UPDATE 用 after；DELETE 通常无 after，回退 before（否则 _columns_json 为空）。
         RowImage image = record.getAfterImage();
         if (image == null) {
             image = record.getBeforeImage();

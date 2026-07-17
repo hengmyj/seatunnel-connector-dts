@@ -19,6 +19,15 @@ import org.apache.seatunnel.connectors.seatunnel.dts.source.reader.DtsSourceRead
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 阿里云 DTS 订阅 Source（插件名 {@code Dts}）。
+ *
+ * <p>输出固定信封 schema：{@code _database/_table/_op/_ts/_offset/_columns_json}。列数据在 {@code
+ * _columns_json} 内，与 Jdbc Sink 的 {@code schema_save_mode} 直连不兼容，需 Transform 或后续
+ * {@code debezium_json} 形态。
+ *
+ * <p>继承单 Split Source：同一 {@code sid} 同时只能有一个消费者，并行度应固定为 1。
+ */
 public class DtsSource extends AbstractSingleSplitSource<SeaTunnelRow> {
 
     private final DtsSourceConfig config;
@@ -26,6 +35,7 @@ public class DtsSource extends AbstractSingleSplitSource<SeaTunnelRow> {
 
     public DtsSource(ReadonlyConfig pluginConfig) {
         this.config = new DtsSourceConfig(pluginConfig);
+        // 信封字段顺序与 DtsRecordConverter / DtsSourceReader 快照下标约定一致，勿随意调整。
         SeaTunnelRowType rowType =
                 new SeaTunnelRowType(
                         new String[] {
@@ -64,7 +74,7 @@ public class DtsSource extends AbstractSingleSplitSource<SeaTunnelRow> {
 
     @Override
     public void setJobContext(JobContext jobContext) {
-        // parallelism=1 enforced via env config; single-split source only
+        // 并行度由 HOCON env.parallelism=1 约束；本 Source 本身也是单 Split。
     }
 
     @Override
