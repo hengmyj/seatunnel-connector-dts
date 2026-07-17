@@ -31,43 +31,68 @@
 | DTS 凭证 | 参考 `../dts-bridge/config.properties` 或 `config.properties.example` |
 | 网络 | 可访问 DTS broker（`:18001`） |
 
-## dts-sdk.jar 安装
+## dts-sdk.jar 安装（**不随仓库分发**）
+
+`*.jar` / `dts-sdk.jar` **禁止 commit**。本仓库只提供文档与源码；请自行下载并放到约定路径。
 
 ### 什么是 dts-sdk.jar
 
-- 阿里云 DTS **订阅**官方 Java SDK（`DefaultDTSConsumer` 等），**非本仓库编译产物**
-- 从阿里云 DTS 控制台获取：订阅任务 → Kafka 客户端 demo / 订阅 SDK 下载
-- 官方文档：[使用 Kafka 客户端消费订阅数据](https://help.aliyun.com/zh/dts/user-guide/use-a-kafka-client-to-consume-tracked-data-2)
-- 示例代码参考：[silly-fofo/subscribe_example](https://github.com/silly-fofo/subscribe_example)
+- 阿里云 DTS **订阅** Java SDK（`DefaultDTSConsumer` 等），**非本仓库编译产物**
+- 本工程编译期通过 `connector-dts/pom.xml` 的 `systemPath` 引用本地 jar（默认 `../dts-bridge/dts-sdk.jar`），运行期由 SeaTunnel 插件目录加载
+
+### 官方获取渠道（推荐）
+
+| 渠道 | 链接 |
+|------|------|
+| GitHub 源码 / 使用说明 | [aliyun/aliyun-dts-subscribe-sdk-java](https://github.com/aliyun/aliyun-dts-subscribe-sdk-java) |
+| Maven Central | [com.aliyun.dts:dts-new-subscribe-sdk](https://central.sonatype.com/artifact/com.aliyun.dts/dts-new-subscribe-sdk) |
+| 阿里云帮助（SDK Demo 消费订阅） | [使用 SDK 客户端消费订阅数据](https://help.aliyun.com/zh/dts/user-guide/use-the-sdk-demo-to-consume-tracked-data) |
+| 英文文档 | [Use an SDK to consume change tracking data](https://www.alibabacloud.com/help/en/dts/user-guide/use-the-sdk-demo-to-consume-tracked-data) |
+| Kafka 客户端消费（对照） | [使用 Kafka 客户端消费订阅数据](https://help.aliyun.com/zh/dts/user-guide/use-a-kafka-client-to-consume-tracked-data-2) |
+
+Maven 依赖示例（公开 SDK；版本以 Maven Central 最新为准）：
+
+```xml
+<dependency>
+  <groupId>com.aliyun.dts</groupId>
+  <artifactId>dts-new-subscribe-sdk</artifactId>
+  <version>2.1.4</version>
+</dependency>
+```
+
+也可从 DTS 控制台订阅任务页下载 Kafka 客户端 demo / 订阅 SDK。
+
+### 本仓库当前用法（本地闭源/专有形态）
+
+开发机通常已有 `../dts-bridge/dts-sdk.jar`（与公开 Maven 坐标形态可能不同，**如实按本地 path 使用**）：
+
+1. 自行下载或从已有环境拷贝 SDK jar
+2. 放到约定路径：`../dts-bridge/dts-sdk.jar`（与 `pom.xml` 中 `${dts.sdk.path}` 一致）
+3. **不要**把 jar 加入 git；`.gitignore` 已忽略 `*.jar`
 
 ### 为何与 connector jar 分离
 
 | 原因 | 说明 |
 |------|------|
-| 许可 | 专有组件，**不能**打入 connector fat jar |
+| 分发 | SDK **不进本仓库**，自行下载放置 |
 | SeaTunnel 插件隔离 | SDK 须放在 `plugins/connector-dts/dts-sdk.jar`，由插件 classloader 加载 |
 | plugin-mapping | `seatunnel.source.Dts = connector-dts`（子目录名 `connector-dts` 须与 mapping 值一致） |
-
-### 如何获取
-
-1. **阿里云 DTS 控制台** — 订阅任务页面下载 Kafka 客户端 demo / 订阅 SDK（推荐首次获取）
-2. **本仓库** — 复制 `../dts-bridge/dts-sdk.jar`（开发机通常已有）
-3. **无法从 Maven Central 下载** — `pom.xml` 中 `dts-sdk` 为 `system` scope，仅编译期引用
 
 ### 安装步骤
 
 **本地开发（Mac / 本机 SeaTunnel）**
 
 ```bash
-cd seatunnel-connector-dts   # 或本仓库根目录
-sh build.sh   # 自动从 ../dts-bridge/dts-sdk.jar 拷贝到 plugins/connector-dts/
+# 确保 SDK 已放到 ../dts-bridge/dts-sdk.jar（自行下载，勿提交）
+cd seatunnel-connector-dts
+sh build.sh   # 编译 connector，并拷贝 SDK 到 plugins/connector-dts/
 ```
 
 **远程 / 新机器**
 
 ```bash
-# 1. 将 dts-sdk.jar 传到目标机
-scp ../dts-bridge/dts-sdk.jar user@host:/tmp/
+# 1. 将自行准备的 dts-sdk.jar 传到目标机
+scp /path/to/dts-sdk.jar user@host:/tmp/
 
 # 2. 一键部署（推荐）
 cd ..   # seatunnel 工作区根目录
@@ -91,7 +116,7 @@ ls -lh plugins/connector-dts/dts-sdk.jar   # 约 17MB，非空
 | 现象 | 原因与处理 |
 |------|-----------|
 | `NoClassDefFoundError: com/aliyun/dts/subscribe/clients/ConsumerContext` | 缺少 `plugins/connector-dts/dts-sdk.jar`；按上文安装后重启作业 |
-| `build.sh` 报 `missing DTS SDK` | 开发机 `dts-bridge/dts-sdk.jar` 不存在；从控制台下载或从其他机器拷贝 |
+| `build.sh` 报 `missing DTS SDK` | `../dts-bridge/dts-sdk.jar` 不存在；按官方链接自行下载后放到该路径 |
 | 远程仅拷贝了 `connector-dts-*.jar` | connector jar 不含 SDK 类，必须单独部署 `dts-sdk.jar` |
 
 ## 项目结构
@@ -272,10 +297,10 @@ sink {
 
 ## Git 说明
 
-- 本目录为**本地专用** git 仓库，不推送远程
-- `config/dts-to-console.conf`、`config/dts-to-mysql.conf` 已 gitignore（含凭证）
-- `localCheckpointStore-*` 已 gitignore
-- 仅提交 `*.example` 模板和源码，**勿提交密码**
+- 本目录为**本地专用** git 仓库，默认不推送远程
+- **勿提交**：`*.jar`（含 `dts-sdk.jar`）、真实 `config/*.conf`、`**/config.properties`、`.env`、密钥文件、`script/`（可能含 OSS AK）
+- **可提交**：`config/*.conf.example`、源码、文档；示例里用 `your_password` 等占位符
+- `localCheckpointStore-*`、`target/`、`*.log` 已 gitignore
 
 ## 常见问题
 
@@ -305,4 +330,7 @@ A: `dry-run=true` 跳过 `DtsRecordConverter`，只计数并 `commit` 推进位�
 - [实施计划](../docs/plans/2026-06-25-dts-seatunnel-connector.md)
 - [SDK API 笔记](docs/sdk-api-notes.md)
 - [dts-bridge README](../dts-bridge/README.md)（凭证与 checkpoint 参考）
+- [aliyun-dts-subscribe-sdk-java](https://github.com/aliyun/aliyun-dts-subscribe-sdk-java)
+- [dts-new-subscribe-sdk (Maven)](https://central.sonatype.com/artifact/com.aliyun.dts/dts-new-subscribe-sdk)
+- [使用 SDK 客户端消费订阅数据](https://help.aliyun.com/zh/dts/user-guide/use-the-sdk-demo-to-consume-tracked-data)
 - [阿里云 DTS Kafka 客户端消费文档](https://help.aliyun.com/zh/dts/user-guide/use-a-kafka-client-to-consume-tracked-data-2)

@@ -1,9 +1,31 @@
+# Build
 target/
 *.class
+*.jar
+!**/src/**/resources/**
+
+# IDE / OS
 .idea/
 *.iml
 .DS_Store
-config/dts-to-console.conf
-config/dts-to-mysql.conf
-localCheckpointStore-*
+.sdk-extract/
+
+# Local credentials & real job configs (keep *.example)
+config/*.conf
+!config/*.conf.example
+**/config.properties
+!**/config.properties.example
+*.env
+.env*
+*.pem
+*.key
+*credentials*
+*secret*
+
+# Local scripts that may contain OSS/ak keys
 script/
+
+# Runtime state
+localCheckpointStore-*
+*.log
+tmp/

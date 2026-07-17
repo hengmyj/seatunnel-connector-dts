@@ -1,6 +1,14 @@
 # DTS SDK API Notes (Phase 0)
 
-Probed from `../dts-bridge/dts-sdk.jar` via `jar tf` + `javap`.
+Probed from local `../dts-bridge/dts-sdk.jar` via `jar tf` + `javap`.
+
+**SDK jar 不随本仓库分发。** 请自行下载并放到 `../dts-bridge/dts-sdk.jar`（或修改 `pom.xml` 中 `${dts.sdk.path}`）。官方渠道：
+
+- GitHub: https://github.com/aliyun/aliyun-dts-subscribe-sdk-java
+- Maven: https://central.sonatype.com/artifact/com.aliyun.dts/dts-new-subscribe-sdk
+- 文档: https://help.aliyun.com/zh/dts/user-guide/use-the-sdk-demo-to-consume-tracked-data
+
+本工程当前用本地闭源/专有形态 jar + `system` scope；**勿把 jar commit 进 git**。
 
 ## Record API
 
