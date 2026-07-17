@@ -1,6 +1,6 @@
 # DTS SDK API Notes (Phase 0)
 
-Probed from `~/Documents/flash/seatunnel/dts-bridge/dts-sdk.jar` via `jar tf` + `javap`.
+Probed from `../dts-bridge/dts-sdk.jar` via `jar tf` + `javap`.
 
 ## Record API
 

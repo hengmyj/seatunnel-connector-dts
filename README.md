@@ -26,9 +26,9 @@
 |----|------|
 | JDK | 8 或 11 |
 | Maven | 3.6+ |
-| SeaTunnel | `~/Documents/flash/seatunnel/apache-seatunnel-2.3.13/` |
+| SeaTunnel | `../apache-seatunnel-2.3.13/` |
 | DTS SDK | `dts-sdk.jar` 须单独部署，见下文 [dts-sdk.jar 安装](#dts-sdkjar-安装) |
-| DTS 凭证 | 参考 `dts-bridge/config.properties` 或 `config.properties.example` |
+| DTS 凭证 | 参考 `../dts-bridge/config.properties` 或 `config.properties.example` |
 | 网络 | 可访问 DTS broker（`:18001`） |
 
 ## dts-sdk.jar 安装
@@ -51,7 +51,7 @@
 ### 如何获取
 
 1. **阿里云 DTS 控制台** — 订阅任务页面下载 Kafka 客户端 demo / 订阅 SDK（推荐首次获取）
-2. **本仓库** — 复制 `~/Documents/flash/seatunnel/dts-bridge/dts-sdk.jar`（开发机通常已有）
+2. **本仓库** — 复制 `../dts-bridge/dts-sdk.jar`（开发机通常已有）
 3. **无法从 Maven Central 下载** — `pom.xml` 中 `dts-sdk` 为 `system` scope，仅编译期引用
 
 ### 安装步骤
@@ -59,7 +59,7 @@
 **本地开发（Mac / 本机 SeaTunnel）**
 
 ```bash
-cd ~/Documents/flash/seatunnel/seatunnel-connector-dts
+cd seatunnel-connector-dts   # 或本仓库根目录
 sh build.sh   # 自动从 ../dts-bridge/dts-sdk.jar 拷贝到 plugins/connector-dts/
 ```
 
@@ -67,10 +67,10 @@ sh build.sh   # 自动从 ../dts-bridge/dts-sdk.jar 拷贝到 plugins/connector-
 
 ```bash
 # 1. 将 dts-sdk.jar 传到目标机
-scp ~/Documents/flash/seatunnel/dts-bridge/dts-sdk.jar user@host:/tmp/
+scp ../dts-bridge/dts-sdk.jar user@host:/tmp/
 
 # 2. 一键部署（推荐）
-cd ~/Documents/flash/seatunnel
+cd ..   # seatunnel 工作区根目录
 DTS_SDK_JAR=/tmp/dts-sdk.jar sh scripts/deploy-seatunnel-dts.sh
 
 # 或手动放置
@@ -129,7 +129,7 @@ apache-seatunnel-2.3.13/
 使用顶层部署脚本一键下载 SeaTunnel、注册 DTS 插件并生成配置模板（**须自备 `dts-sdk.jar`**，见 [dts-sdk.jar 安装](#dts-sdkjar-安装)）：
 
 ```bash
-cd ~/Documents/flash/seatunnel
+cd ..   # seatunnel 工作区根目录
 DTS_SDK_JAR=~/dts-sdk.jar sh scripts/deploy-seatunnel-dts.sh
 ```
 
@@ -138,7 +138,7 @@ DTS_SDK_JAR=~/dts-sdk.jar sh scripts/deploy-seatunnel-dts.sh
 ## 构建
 
 ```bash
-cd ~/Documents/flash/seatunnel/seatunnel-connector-dts
+cd seatunnel-connector-dts   # 或本仓库根目录
 sh build.sh
 ```
 
@@ -205,7 +205,7 @@ table-list = ["mydb.orders", "mydb.users"]
 ## 运行
 
 ```bash
-cd ~/Documents/flash/seatunnel/apache-seatunnel-2.3.13
+cd ../apache-seatunnel-2.3.13
 ./bin/seatunnel.sh --config ../seatunnel-connector-dts/config/dts-to-console.conf -m local
 ```
 

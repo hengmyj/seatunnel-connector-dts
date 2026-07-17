@@ -6,3 +6,4 @@ target/
 config/dts-to-console.conf
 config/dts-to-mysql.conf
 localCheckpointStore-*
+script/
