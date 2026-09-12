@@ -76,7 +76,7 @@ public class DtsSourceOptions {
                     .booleanType()
                     .defaultValue(false)
                     .withDescription(
-                            "白名单内 DML 的 _columns_json 输出为空 {}；table-list 过滤仍生效（Console 测速用）");
+                            "白名单内 DML 的 _columns_json 输出为空 {}，且不调用 getAfterImage（不解码 Avro 行镜像；Console 测速用）");
 
     public static final Option<Integer> POLL_BATCH_SIZE =
             Options.key("poll-batch-size")
@@ -89,7 +89,7 @@ public class DtsSourceOptions {
                     .listType()
                     .defaultValue(Collections.emptyList())
                     .withDescription(
-                            "表白名单 db.table（小写）；未命中 DML 走 skipAndCommit，不构建 _columns_json；空表示全部表");
+                            "表白名单 db.table（小写）；未命中 DML 只读 header 库表后 skipAndCommit，不解码 Avro images；空表示全部表");
 
     public static final Option<Integer> MAX_COLUMN_JSON_LENGTH =
             Options.key("max-column-json-length")

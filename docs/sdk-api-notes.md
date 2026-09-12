@@ -1,27 +1,27 @@
 # DTS SDK API Notes (Phase 0)
 
-Probed from local `../dts-bridge/dts-sdk.jar` via `jar tf` + `javap`.
-
-**SDK jar 不随本仓库分发。** 请自行下载并放到 `../dts-bridge/dts-sdk.jar`（或修改 `pom.xml` 中 `${dts.sdk.path}`）。官方渠道：
+Compile against Maven `com.aliyun.dts:dts-new-subscribe-sdk:2.1.6`. Runtime: `mvn package` copies `jar-with-dependencies` to `connector-dts/target/dts-sdk.jar` → `plugins/connector-dts/dts-sdk.jar`.
 
 - GitHub: https://github.com/aliyun/aliyun-dts-subscribe-sdk-java
 - Maven: https://central.sonatype.com/artifact/com.aliyun.dts/dts-new-subscribe-sdk
-- 文档: https://help.aliyun.com/zh/dts/user-guide/use-the-sdk-demo-to-consume-tracked-data
+- Docs: https://help.aliyun.com/zh/dts/user-guide/use-the-sdk-demo-to-consume-tracked-data
 
-本工程当前用本地闭源/专有形态 jar + `system` scope；**勿把 jar commit 进 git**。
+`UserRecordGenerator` builds `LazyParseRecordImpl` (header vs payload). Do **not** rewrite RecordGenerator.
 
 ## Record API
 
 | Method | Class | Notes |
 |--------|-------|-------|
-| `getOperationType()` | `DefaultUserRecord` | INSERT / UPDATE / DELETE / DDL |
-| `getBeforeImage()` / `getAfterImage()` | `DefaultUserRecord` | `RowImage` with `Value[]` |
-| `getSchema()` | `DefaultUserRecord` | `RecordSchema` |
-| `getOffset()` | `DefaultUserRecord` | Kafka offset |
-| `getSourceTimestamp()` | `DefaultUserRecord` | Event timestamp (seconds) |
-| `commit(String metadata)` | `DefaultUserRecord` | Manual commit after processing |
+| `getOperationType()` | `UserRecord` / `LazyParseRecordImpl` | Header only. INSERT / UPDATE / DELETE / DDL / HEARTBEAT |
+| `getSchema(false)` | `LazyParseRecordImpl` | Header schema; empty schema + `getSchema()` **would** `initPayload` |
+| `getDatabaseName()` / `getTableName()` | `LazyRecordSchema` | From `objectName` / tags `l_db_name` `l_tb_name`; does **not** init payload |
+| `getFields()` / `getFieldCount()` / `toString()` | `LazyRecordSchema` | **Does** `initPayload` |
+| `getBeforeImage()` / `getAfterImage()` | `UserRecord` | **Does** `initPayload` (Avro fields + images) |
+| `offset()` | `LazyParseRecordImpl` | Kafka offset (constructor; not on `UserRecord`) |
+| `getSourceTimestamp()` | `UserRecord` | Header timestamp |
+| `commit(String metadata)` | `UserRecord` | Manual commit after processing |
 
-`RecordListener.consume(DefaultUserRecord)` — callback entry point.
+`RecordListener.consume(UserRecord)` — callback entry point (`LazyParseRecordImpl` at runtime).
 
 ## RecordSchema
 

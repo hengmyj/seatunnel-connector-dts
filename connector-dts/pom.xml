@@ -14,7 +14,7 @@
     <name>SeaTunnel DTS Source Connector</name>
 
     <properties>
-        <dts.sdk.path>${maven.multiModuleProjectDirectory}/../dts-bridge/dts-sdk.jar</dts.sdk.path>
+        <dts.sdk.version>2.1.6</dts.sdk.version>
     </properties>
 
     <dependencies>
@@ -34,10 +34,18 @@
         </dependency>
         <dependency>
             <groupId>com.aliyun.dts</groupId>
-            <artifactId>dts-sdk</artifactId>
-            <version>1.0</version>
-            <scope>system</scope>
-            <systemPath>${dts.sdk.path}</systemPath>
+            <artifactId>dts-new-subscribe-sdk</artifactId>
+            <version>${dts.sdk.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-log4j12</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>log4j</groupId>
+                    <artifactId>log4j</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.google.auto.service</groupId>
@@ -79,6 +87,33 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-dts-sdk-fat</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>com.aliyun.dts</groupId>
+                                    <artifactId>dts-new-subscribe-sdk</artifactId>
+                                    <version>${dts.sdk.version}</version>
+                                    <type>jar</type>
+                                    <classifier>jar-with-dependencies</classifier>
+                                    <destFileName>dts-sdk.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                            <outputDirectory>${project.build.directory}</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
