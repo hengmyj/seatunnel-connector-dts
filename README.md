@@ -35,86 +35,46 @@
 | JDK | 8 或 11 |
 | Maven | 3.6+ |
 | SeaTunnel | `../apache-seatunnel-2.3.13/` |
-| DTS SDK | `dts-sdk.jar` 须单独部署，见下文 [dts-sdk.jar 安装](#dts-sdkjar-安装) |
+| DTS SDK | Maven `com.aliyun.dts:dts-new-subscribe-sdk`（`2.1.6`，含 `LazyParseRecordImpl`） |
 | DTS 凭证 | 参考 `../dts-bridge/config.properties` 或 `config.properties.example` |
 | 网络 | 可访问 DTS broker（`:18001`） |
 
-## dts-sdk.jar 安装（**不随仓库分发**）
+## DTS SDK（Maven 开源）
 
-`*.jar` / `dts-sdk.jar` **禁止 commit**。本仓库只提供文档与源码；请自行下载并放到约定路径。
-
-### 什么是 dts-sdk.jar
-
-- 阿里云 DTS **订阅** Java SDK（`DefaultDTSConsumer` 等），**非本仓库编译产物**
-- 本工程编译期通过 `connector-dts/pom.xml` 的 `systemPath` 引用本地 jar（默认 `../dts-bridge/dts-sdk.jar`），运行期由 SeaTunnel 插件目录加载
-
-### 官方获取渠道（推荐）
-
-| 渠道 | 链接 |
-|------|------|
-| GitHub 源码 / 使用说明 | [aliyun/aliyun-dts-subscribe-sdk-java](https://github.com/aliyun/aliyun-dts-subscribe-sdk-java) |
-| Maven Central | [com.aliyun.dts:dts-new-subscribe-sdk](https://central.sonatype.com/artifact/com.aliyun.dts/dts-new-subscribe-sdk) |
-| 阿里云帮助（SDK Demo 消费订阅） | [使用 SDK 客户端消费订阅数据](https://help.aliyun.com/zh/dts/user-guide/use-the-sdk-demo-to-consume-tracked-data) |
-| 英文文档 | [Use an SDK to consume change tracking data](https://www.alibabacloud.com/help/en/dts/user-guide/use-the-sdk-demo-to-consume-tracked-data) |
-| Kafka 客户端消费（对照） | [使用 Kafka 客户端消费订阅数据](https://help.aliyun.com/zh/dts/user-guide/use-a-kafka-client-to-consume-tracked-data-2) |
-
-Maven 依赖示例（公开 SDK；版本以 Maven Central 最新为准）：
+编译依赖公开坐标 `com.aliyun.dts:dts-new-subscribe-sdk:2.1.6`（[Maven Central](https://central.sonatype.com/artifact/com.aliyun.dts/dts-new-subscribe-sdk)，Apache-2.0），**不再**引用本地 `../dts-bridge/dts-sdk.jar`。该版本的 `UserRecordGenerator` 产出 `LazyParseRecordImpl`：先反序列化 header（`objectName` → 库表），`getAfterImage()` / `getFields()` 才解码 Avro payload（fields + before/after images）。
 
 ```xml
 <dependency>
   <groupId>com.aliyun.dts</groupId>
   <artifactId>dts-new-subscribe-sdk</artifactId>
-  <version>2.1.4</version>
+  <version>2.1.6</version>
 </dependency>
 ```
 
-也可从 DTS 控制台订阅任务页下载 Kafka 客户端 demo / 订阅 SDK。
+运行期仍由 SeaTunnel 插件 classloader 从 `plugins/connector-dts/` 加载 SDK。`mvn package` 会把 `jar-with-dependencies` 拷到 `connector-dts/target/dts-sdk.jar`，`build.sh` 再部署为 `plugins/connector-dts/dts-sdk.jar`（connector 插件 jar **不含** SDK 类）。
 
-### 本仓库当前用法（本地闭源/专有形态）
-
-开发机通常已有 `../dts-bridge/dts-sdk.jar`（与公开 Maven 坐标形态可能不同，**如实按本地 path 使用**）：
-
-1. 自行下载或从已有环境拷贝 SDK jar
-2. 放到约定路径：`../dts-bridge/dts-sdk.jar`（与 `pom.xml` 中 `${dts.sdk.path}` 一致）
-3. **不要**把 jar 加入 git；`.gitignore` 已忽略 `*.jar`
-
-### 为何与 connector jar 分离
-
-| 原因 | 说明 |
-|------|------|
-| 分发 | SDK **不进本仓库**，自行下载放置 |
-| SeaTunnel 插件隔离 | SDK 须放在 `plugins/connector-dts/dts-sdk.jar`，由插件 classloader 加载 |
-| plugin-mapping | `seatunnel.source.Dts = connector-dts`（子目录名 `connector-dts` 须与 mapping 值一致） |
+官方渠道：[GitHub](https://github.com/aliyun/aliyun-dts-subscribe-sdk-java) · [使用 SDK 消费订阅数据](https://help.aliyun.com/zh/dts/user-guide/use-the-sdk-demo-to-consume-tracked-data)
 
 ### 安装步骤
 
-**本地开发（Mac / 本机 SeaTunnel）**
+**本地开发**
 
 ```bash
-# 确保 SDK 已放到 ../dts-bridge/dts-sdk.jar（自行下载，勿提交）
 cd seatunnel-connector-dts
-sh build.sh   # 编译 connector，并拷贝 SDK 到 plugins/connector-dts/
+sh build.sh   # mvn package 拉取 SDK，并拷贝到 plugins/connector-dts/dts-sdk.jar
 ```
 
 **远程 / 新机器**
 
 ```bash
-# 1. 将自行准备的 dts-sdk.jar 传到目标机
-scp /path/to/dts-sdk.jar user@host:/tmp/
+# 1. 构建（或拷贝已构建的 connector jar + target/dts-sdk.jar）
+cd seatunnel-connector-dts
+mvn -q package -DskipTests
 
-# 2. 一键部署（推荐）
-cd ..   # seatunnel 工作区根目录
-DTS_SDK_JAR=/tmp/dts-sdk.jar sh scripts/deploy-seatunnel-dts.sh
-
-# 或手动放置
+# 2. 部署
 mkdir -p /path/to/apache-seatunnel-2.3.13/plugins/connector-dts
-cp /tmp/dts-sdk.jar /path/to/apache-seatunnel-2.3.13/plugins/connector-dts/dts-sdk.jar
-```
-
-**验证**
-
-```bash
-ls -lh plugins/connector-dts/dts-sdk.jar   # 约 17MB，非空
+cp connector-dts/target/connector-dts-2.3.13.jar /path/to/apache-seatunnel-2.3.13/connectors/
+cp connector-dts/target/dts-sdk.jar /path/to/apache-seatunnel-2.3.13/plugins/connector-dts/dts-sdk.jar
 ```
 
 须同时存在：`connectors/connector-dts-2.3.13.jar` + `plugins/connector-dts/dts-sdk.jar` + `plugin-mapping.properties` 中的 `seatunnel.source.Dts = connector-dts`。
@@ -123,8 +83,8 @@ ls -lh plugins/connector-dts/dts-sdk.jar   # 约 17MB，非空
 
 | 现象 | 原因与处理 |
 |------|-----------|
-| `NoClassDefFoundError: com/aliyun/dts/subscribe/clients/ConsumerContext` | 缺少 `plugins/connector-dts/dts-sdk.jar`；按上文安装后重启作业 |
-| `build.sh` 报 `missing DTS SDK` | `../dts-bridge/dts-sdk.jar` 不存在；按官方链接自行下载后放到该路径 |
+| `NoClassDefFoundError: com/aliyun/dts/subscribe/clients/ConsumerContext` | 缺少 `plugins/connector-dts/dts-sdk.jar`；先 `sh build.sh` 后重启作业 |
+| `build.sh` 报 `missing DTS SDK fat jar` | `mvn package` 未拷到 `connector-dts/target/dts-sdk.jar`；检查能否访问 Maven Central |
 | 远程仅拷贝了 `connector-dts-*.jar` | connector jar 不含 SDK 类，必须单独部署 `dts-sdk.jar` |
 
 ## 项目结构
@@ -161,14 +121,14 @@ apache-seatunnel-2.3.13/
 
 ## 远程 / 新机器部署
 
-使用顶层部署脚本一键下载 SeaTunnel、注册 DTS 插件并生成配置模板（**须自备 `dts-sdk.jar`**，见 [dts-sdk.jar 安装](#dts-sdkjar-安装)）：
+使用顶层部署脚本一键下载 SeaTunnel、注册 DTS 插件并生成配置模板（SDK 由 `mvn package` 从 Maven Central 拉取）：
 
 ```bash
 cd ..   # seatunnel 工作区根目录
 DTS_SDK_JAR=~/dts-sdk.jar sh scripts/deploy-seatunnel-dts.sh
 ```
 
-常用环境变量：`INSTALL_DIR`（安装路径）、`SKIP_DOWNLOAD=true`（仅更新插件）、`DTS_SDK_JAR`（SDK 路径，**必填**若不在 `dts-bridge/` 默认位置）、`BUILD_CONNECTOR=no` + `CONNECTOR_JAR`（使用预编译 jar）。详见 `scripts/deploy-seatunnel-dts.sh` 头部注释。
+常用环境变量：`INSTALL_DIR`（安装路径）、`SKIP_DOWNLOAD=true`（仅更新插件）、`DTS_SDK_JAR`（可选覆盖 SDK 路径）、`BUILD_CONNECTOR=no` + `CONNECTOR_JAR`（使用预编译 jar）。详见 `scripts/deploy-seatunnel-dts.sh` 头部注释。
 
 ## 构建
 
@@ -181,7 +141,7 @@ sh build.sh
 
 1. `mvn -q package -DskipTests` — 编译 `connector-dts-2.3.13.jar`
 2. 拷贝 jar → `apache-seatunnel-2.3.13/connectors/`
-3. 拷贝 `dts-sdk.jar` → `plugins/connector-dts/`
+3. 拷贝 Maven 拉取的 `dts-sdk.jar` → `plugins/connector-dts/`
 4. 注册 `plugin-mapping.properties`（若尚未存在）
 5. 在 `plugin_config` 的 `--connectors-v2--` 段启用 `connector-dts`
 
@@ -223,8 +183,9 @@ cp config/dts-to-console.conf.example config/dts-to-console.conf
 | `force-checkpoint` | 否 | `false` | `true` 时每次启动强制使用 `checkpoint`，忽略本地 store |
 | `max-poll-records` | 否 | `500` | Kafka `max.poll.records`，调大可提高吞吐 |
 | `queue-capacity` | 否 | `10000` | SDK 回调与 Reader 之间有界队列容量 |
-| `table-list` | 否 | 空（全部表） | 表白名单，`db.table` 格式；支持 HOCON 数组或逗号分隔字符串 |
+| `table-list` | 否 | 空（全部表） | 表白名单，`db.table` 格式；未命中只读 header 库表后 skip+commit，不解码 Avro 行镜像 |
 | `dry-run` | 否 | `false` | 仅计数并 commit，跳过 convert/入队/JSON（测速用；**无法**做 table-list 过滤） |
+| `skip-columns-json` | 否 | `false` | 命中表仍输出信封，但 `_columns_json={}` 且不调用 `getAfterImage()` |
 
 ### table-list 示例
 
@@ -235,7 +196,7 @@ table-list = ["mydb.orders", "mydb.users"]
 # 或逗号分隔（单字符串会被解析为 list 的一项，推荐用数组）
 ```
 
-白名单外的 DML 事件会被跳过且不输出，但会 `commit` 以推进位点，避免卡在非目标表上。
+白名单外的 DML 只从 header 读取库表名后 `commit`，**不解码** `beforeImages`/`afterImages`。在 DTS 控制台收窄订阅对象仍可节省带宽（客户端 skip 无法减少 broker 推送）。
 
 ## 性能 / 吞吐参考
 
@@ -246,8 +207,8 @@ table-list = ["mydb.orders", "mydb.users"]
 | 因素 | 说明（有历史验证） |
 |------|-------------------|
 | **`dry-run`** | `true`：跳过 convert / 入队 / `_columns_json`，只计数并 `commit`，测 SDK 纯消费上限；`false` 才走表名过滤与真实输出 |
-| **是否构建 `_columns_json`** | 宽表 / 大字段序列化是 DML 主开销；`skip-columns-json=true` 可测「不过列 JSON」路径（测速用） |
-| **`table-list` 过滤比例** | 白名单外只读库表名后 `skipAndCommit`，不做列 JSON；过滤越多，有效下游行越少、CPU 越省 |
+| **是否构建 `_columns_json`** | 宽表 / 大字段序列化是 DML 主开销；`skip-columns-json=true` 可测「不过列 JSON、不解码行镜像」路径（测速用） |
+| **`table-list` 过滤比例** | 白名单外只读 header 库表后 `skipAndCommit`，不解码 Avro images；过滤越多，CPU 越省 |
 | **下游 Sink** | Console 打印大 JSON 会严重拖慢；真实 Jdbc 等 Sink 才能代表业务吞吐 |
 | **JVM 堆** | 默认 `jvm_client_options` 约 `-Xmx512m` 易 OOM；生产建议 `-Xmx4g`（或等价 `JvmOption`） |
 | **队列与背压** | connector `queue-capacity`（默认 10000）满则 SDK 回调阻塞；SDK 内部队列上限约 **512**，下游慢 / DDL 段 `skip` 不 `commit` 时易顶满 |
@@ -370,7 +331,7 @@ sink {
 ## 常见问题
 
 **Q: 运行时报 `NoClassDefFoundError: com/aliyun/dts/subscribe/clients/ConsumerContext`？**  
-A: 缺少 `dts-sdk.jar`。见上文 [dts-sdk.jar 安装](#dts-sdkjar-安装) — 仅拷贝 `connector-dts-*.jar` 到远程而不部署 SDK 会触发此错误。
+A: 缺少 `dts-sdk.jar`。见上文 [DTS SDK（Maven 开源）](#dts-sdkmaven-开源) — 仅拷贝 `connector-dts-*.jar` 到远程而不部署 SDK 会触发此错误。
 
 **Q: 启动报找不到 Dts 插件？**  
 A: 先执行 `sh build.sh`（或远程 `deploy-seatunnel-dts.sh`），确认 `connectors/connector-dts-2.3.13.jar`、`plugins/connector-dts/dts-sdk.jar` 均存在，且 `plugin-mapping.properties` 含 `seatunnel.source.Dts = connector-dts`。
@@ -388,7 +349,7 @@ A: 确认 `force-checkpoint=true`、已删除 `localCheckpointStore-{sid}`、作
 A: 调大 `queue-capacity` 或 `max-poll-records`；确认下游 Sink 无背压。
 
 **Q: dry-run 与正式运行的区别？**  
-A: `dry-run=true` 跳过 `DtsRecordConverter`，只计数并 `commit` 推进位点，不入队、不读表名、不序列化 JSON，适合测 SDK 纯消费吞吐（如 11w+ rps）。要做 `table-list` 过滤须 `dry-run=false`；可配合 `skip-columns-json=true` 降低列 JSON 开销。
+A: `dry-run=true` 跳过 `DtsRecordConverter`，只计数并 `commit` 推进位点，不入队、不读表名、不序列化 JSON，适合测 SDK 纯消费吞吐（如 11w+ rps）。要做 `table-list` 过滤须 `dry-run=false`；可配合 `skip-columns-json=true`（不解码行镜像）。
 
 ## 参考
 

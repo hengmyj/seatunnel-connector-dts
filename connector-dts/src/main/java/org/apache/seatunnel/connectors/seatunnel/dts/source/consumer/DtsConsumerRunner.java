@@ -3,7 +3,7 @@ package org.apache.seatunnel.connectors.seatunnel.dts.source.consumer;
 import com.aliyun.dts.subscribe.clients.ConsumerContext;
 import com.aliyun.dts.subscribe.clients.DefaultDTSConsumer;
 import com.aliyun.dts.subscribe.clients.common.RecordListener;
-import com.aliyun.dts.subscribe.clients.record.DefaultUserRecord;
+import com.aliyun.dts.subscribe.clients.record.UserRecord;
 
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.seatunnel.dts.source.config.DtsSourceConfig;
@@ -75,7 +75,7 @@ public class DtsConsumerRunner implements AutoCloseable {
                 "seatunnel",
                 new RecordListener() {
                     @Override
-                    public void consume(DefaultUserRecord record) {
+                    public void consume(UserRecord record) {
                         if (!running.get()) {
                             return;
                         }
