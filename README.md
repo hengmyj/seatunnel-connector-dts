@@ -10,6 +10,23 @@
 
 本 connector 的价值就在这条链路上：把 DTS 订阅接进 SeaTunnel，低成本隔离生产，服务回放与多消费场景。
 
+> **快路径（必看）：** 阿里云开源 SDK `LazyParseRecordImpl` 懒解析 + **必须配 `table-list`**。白名单未命中 **不解行镜像**。Live 单分区 SDK **`inRps` ≈ 15–19 万/s**。Console / 不配 `table-list` **看不到**这个速度。细节见下一节。
+
+## 懒解析：真速度（不是假 skip）
+
+**不是**「整行 Avro 已经反序列化完，再跳过 `getAfterImage()`」。未命中时 **根本不解码** `beforeImages` / `afterImages`。
+
+1. **开源 SDK，未自写 Avro 解码。** 使用阿里云开源 [`dts-new-subscribe-sdk`](https://central.sonatype.com/artifact/com.aliyun.dts/dts-new-subscribe-sdk)（`com.aliyun.dts:dts-new-subscribe-sdk:2.1.6`，[GitHub](https://github.com/aliyun/aliyun-dts-subscribe-sdk-java)）的 `LazyParseRecordImpl`。本仓库 **没有** 重写 Avro 解码器。
+2. **消费顺序：先 header，再决定是否解行。**
+   - 先只读 header（`objectName` → **db + table**）。
+   - `table-list` **未命中** → skip + `commit`，**不解析行**（不碰 `beforeImages` / `afterImages`）。
+   - **命中** → 再解码整行镜像，打进 SeaTunnel 信封（`_database` / `_table` / `_op` / `_ts` / `_offset` / `_columns_json`）。
+3. **这是真消费速度。** Live DTS（**单 partition**）配 `table-list` 时 SDK **`inRps` ≈ 150k–190k/s**；内存微基准 header-skip 约 **200 万 rec/s**（`DtsLazyParseMicrobenchTest`）。  
+   **看不到这个数字：** 没配 `table-list`（空 = 全表都解行），或 Sink 是 **Console** 打印大 `_columns_json`（会把吞吐打穿；历史 Console 全量 JSON 只有约 1.5 万 `inRps`）。
+4. **`table-list` 是快路径的前提。** 不配就没有 header-only skip。控制台收窄订阅对象仍能少推带宽；客户端 skip 省的是本机 CPU。
+
+English: We use Aliyun **open-source** `dts-new-subscribe-sdk` (`LazyParseRecordImpl`); we did **not** rewrite Avro decoding. Header-only first (db + table). Whitelist miss → skip, **no row parse**. Hit → then parse the full row into the SeaTunnel envelope. This is **real** consume speed, not “skip `getAfterImage` on an already-fully-deserialized record”. Live DTS (1 partition): **`inRps` ~150k–190k/s** with `table-list`; in-memory skip ~**2M/s**. Console sink / no `table-list` will **not** show this. **`table-list` is required for the fast path.**
+
 ## 架构
 
 ```
@@ -183,7 +200,7 @@ cp config/dts-to-console.conf.example config/dts-to-console.conf
 | `force-checkpoint` | 否 | `false` | `true` 时每次启动强制使用 `checkpoint`，忽略本地 store |
 | `max-poll-records` | 否 | `500` | Kafka `max.poll.records`，调大可提高吞吐 |
 | `queue-capacity` | 否 | `10000` | SDK 回调与 Reader 之间有界队列容量 |
-| `table-list` | 否 | 空（全部表） | 表白名单，`db.table` 格式；未命中只读 header 库表后 skip+commit，不解码 Avro 行镜像 |
+| `table-list` | 否（**快路径必填**） | 空（全部表，每条都解行） | 表白名单，`db.table`；未命中只读 header 后 skip+commit，不解码行镜像。空白名单 = 无快路径 |
 | `dry-run` | 否 | `false` | 仅计数并 commit，跳过 convert/入队/JSON（测速用；**无法**做 table-list 过滤） |
 | `skip-columns-json` | 否 | `false` | 命中表仍输出信封，但 `_columns_json={}` 且不调用 `getAfterImage()` |
 
@@ -230,6 +247,8 @@ table-list = ["mydb.orders", "mydb.users"]
 
 | 场景 | 量级 | 条件 / 备注 |
 |------|------|-------------|
+| connector **`table-list` 快路径**（live DTS，单 partition） | SDK **`inRps` ≈ 15–19 万/s** | header-only skip 未命中表；**不是**「已解完再 skip」。详见上文「懒解析：真速度」 |
+| 内存微基准 skip（header miss） | 约 **200 万 rec/s** | `DtsLazyParseMicrobenchTest`；无 Kafka / 无 Sink |
 | connector **`dry-run=true`** | 约 **11 万+** rps（用户测速）；控制台峰值约 **109k** rps | 跳过 convert/JSON/入队，仍 `commit`；测 SDK 消费上限，**无表过滤、无真实下游行** |
 | dts-bridge 空跑优化后 | SDK `inRps` 约 **7–8 万** | 跳过无客户端 JSON；与 connector dry-run 同属「轻处理」上限参考 |
 | connector 正式路径 + Console | `inRps` 约 **1.5–1.6 万**，`outRps` 约 **百级** | `dry-run=false` + 全量 `_columns_json`；多数非 DML 不 commit |
@@ -238,7 +257,7 @@ table-list = ["mydb.orders", "mydb.users"]
 ### 参考配置结论（用户口径）
 
 - **约 4C 规格下，消费可达 10W+ 下游**（规划/容量口径）。
-- **已验证的同量级证据**：`dry-run=true` 测速约 **11w+** rps（含控制台峰值 ~109k）。该数字是 **SDK 轻路径 commit 上限**，不是「Jdbc 全量列同步已稳定 10W+」的压测结论。
+- **已验证的同量级证据：** 配 **`table-list`** 的 live 单分区 SDK **`inRps` ≈ 15–19 万/s**（header-only skip，真不解行）；历史 `dry-run=true` 约 **11w+** rps 是另一条轻路径（无表过滤）。两者都 **不是**「Jdbc 全量列同步已稳定 10W+」。
 - 生产要接近该量级，需同时满足：足够 CPU（约 4C 量级）、`-Xmx4g` 级堆、合理 `table-list` / 控制台缩订阅、避免与生产抢同一 `sid`、下游 Sink 跟得上；并关掉测速开关（`dry-run=false`，生产勿长期 `skip-columns-json=true`）。
 
 测速建议：
