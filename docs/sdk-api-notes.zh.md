@@ -2,11 +2,11 @@
 
 业务动机与方案价值见 [README · 为什么需要（实际意义）](../README.md#为什么需要实际意义)。
 
-基于本地 `../dts-bridge/dts-sdk.jar`，通过 `jar tf` + `javap` 探测整理。
+基于 Maven `com.aliyun.dts:dts-new-subscribe-sdk:2.1.6`（含 `LazyParseRecordImpl` header/payload 分离）。
 
 ## SDK 来源与放置
 
-**`dts-sdk.jar` 不随本仓库分发。** 请自行下载并放到约定路径 `../dts-bridge/dts-sdk.jar`（或修改 `pom.xml` 中 `${dts.sdk.path}`）。
+编译走 Maven Central；`mvn package` 把 `jar-with-dependencies` 写成 `connector-dts/target/dts-sdk.jar`，`build.sh` 部署到 `plugins/connector-dts/dts-sdk.jar`。**勿把 jar 或真实密钥 commit 进 git**。
 
 官方获取渠道：
 
@@ -16,17 +16,15 @@
 | Maven Central | https://central.sonatype.com/artifact/com.aliyun.dts/dts-new-subscribe-sdk |
 | 阿里云帮助文档 | https://help.aliyun.com/zh/dts/user-guide/use-the-sdk-demo-to-consume-tracked-data |
 
-本工程当前用本地闭源/专有形态 jar + Maven `system` scope；**勿把 jar 或真实密钥 commit 进 git**。
-
-- 本地编译期路径：`../dts-bridge/dts-sdk.jar`
-- 运行期路径：`plugins/connector-dts/dts-sdk.jar`（由 `build.sh` 拷贝）
+- 编译期：`com.aliyun.dts:dts-new-subscribe-sdk:2.1.6`
+- 运行期路径：`plugins/connector-dts/dts-sdk.jar`（由 `build.sh` 拷贝 fat jar）
 - 凭证占位：`your_user` / `your_password`；真实配置见 `config/dts-to-console.conf`（gitignore）
 
 ## 与 connector 的关系
 
 | 组件 | 职责 |
 |------|------|
-| `dts-sdk.jar` | 阿里云 DTS 订阅 SDK（`DefaultDTSConsumer`、`ConsumerContext` 等），**非本仓库编译产物** |
+| `dts-sdk.jar` | Maven `dts-new-subscribe-sdk` fat jar（`DefaultDTSConsumer`、`LazyParseRecordImpl` 等） |
 | `connector-dts-*.jar` | SeaTunnel Source 插件，封装 SDK 回调并输出 `SeaTunnelRow` |
 | `dts-bridge` | 可选参考：独立 TCP 桥；本 connector **直接消费 SDK**，无需桥接 |
 
@@ -40,14 +38,16 @@
 
 | 方法 | 类 | 说明 |
 |------|-----|------|
-| `getOperationType()` | `DefaultUserRecord` | INSERT / UPDATE / DELETE / DDL |
-| `getBeforeImage()` / `getAfterImage()` | `DefaultUserRecord` | `RowImage`，内含 `Value[]` |
-| `getSchema()` | `DefaultUserRecord` | `RecordSchema` |
-| `getOffset()` | `DefaultUserRecord` | Kafka offset |
-| `getSourceTimestamp()` | `DefaultUserRecord` | 事件时间戳（秒） |
-| `commit(String metadata)` | `DefaultUserRecord` | 处理成功后手动提交位点 |
+| `getOperationType()` | `UserRecord` / `LazyParseRecordImpl` | header：INSERT / UPDATE / DELETE / DDL / HEARTBEAT |
+| `getSchema(false)` | `LazyParseRecordImpl` | header schema；空 schema 时 `getSchema()` 会 `initPayload` |
+| `getDatabaseName()` / `getTableName()` | `LazyRecordSchema` | 来自 `objectName` / tags `l_db_name` `l_tb_name`，**不**触发 payload |
+| `getFields()` / `getFieldCount()` / `toString()` | `LazyRecordSchema` | **会** `initPayload` |
+| `getBeforeImage()` / `getAfterImage()` | `UserRecord` | **会**解码 Avro fields + images |
+| `offset()` | `LazyParseRecordImpl` | Kafka offset（构造即有；不在 `UserRecord` 接口上） |
+| `getSourceTimestamp()` | `UserRecord` | 事件时间戳（秒） |
+| `commit(String metadata)` | `UserRecord` | 处理成功后手动提交位点 |
 
-入口回调：`RecordListener.consume(DefaultUserRecord)`。
+入口回调：`RecordListener.consume(UserRecord)`（运行时为 `LazyParseRecordImpl`）。
 
 ## RecordSchema
 

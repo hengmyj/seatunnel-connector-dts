@@ -21,6 +21,7 @@ source {
     queue-capacity = 10000
     dry-run = false
     # 表白名单，格式 db.table；留空或不配置表示订阅全部表
+    # 客户端过滤只跳过 Avro 行镜像；在 DTS 控制台收窄订阅对象仍可节省带宽
     # table-list = ["mydb.orders", "mydb.users"]
     # table-list = "mydb.orders,mydb.users"
   }

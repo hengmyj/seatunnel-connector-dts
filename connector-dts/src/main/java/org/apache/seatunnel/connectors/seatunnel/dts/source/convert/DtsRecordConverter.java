@@ -4,7 +4,8 @@ import com.aliyun.dts.subscribe.clients.record.DefaultUserRecord;
 import com.aliyun.dts.subscribe.clients.record.OperationType;
 import com.aliyun.dts.subscribe.clients.record.RecordSchema;
 import com.aliyun.dts.subscribe.clients.record.RowImage;
-import com.aliyun.dts.subscribe.clients.record.value.Value;
+import com.aliyun.dts.subscribe.clients.record.UserRecord;
+import com.aliyun.dts.subscribe.clients.record.fast.LazyParseRecordImpl;
 
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.slf4j.Logger;
@@ -15,11 +16,14 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * 将 DTS SDK {@link DefaultUserRecord} 转为信封行 {@link SeaTunnelRow}。
+ * 将 DTS SDK {@link UserRecord} 转为信封行 {@link SeaTunnelRow}。
  *
- * <p>仅输出 INSERT/UPDATE/DELETE；DDL 与其它操作类型走 {@link ConvertResult#skip()}（不
- * commit）。表白名单未命中走 {@link ConvertResult#skipAndCommit()}，避免位点卡住同时跳过昂贵的列
- * JSON 构建。
+ * <p>catalog-first：先用 header（{@code objectName} / {@code getDatabaseName}/{@code
+ * getTableName}）做 {@code table-list} 过滤；未命中则 {@link ConvertResult#skipAndCommit()}，不调用
+ * {@code getAfterImage}/{@code getBeforeImage}/{@code getFields}，从而不触发公开 SDK {@code
+ * LazyParseRecordImpl} 的 Avro payload（fields + before/after images）。仅白名单命中表才解析行镜像并打包信封。
+ *
+ * <p>仅输出 INSERT/UPDATE/DELETE；DDL 与其它操作类型走 {@link ConvertResult#skip()}（不 commit）。
  */
 public class DtsRecordConverter {
 
@@ -27,7 +31,7 @@ public class DtsRecordConverter {
 
     /** 小写 {@code db.table} 表白名单；空集合表示不过滤、接收全部表。 */
     private final Set<String> tableWhitelist;
-    /** 为 true 时 {@code _columns_json} 固定为 {@code {}}，表过滤逻辑仍生效。 */
+    /** 为 true 时 {@code _columns_json} 固定为 {@code {}}，且不解析行镜像。 */
     private final boolean skipColumnsJson;
     /** 单列 JSON 最大字符数，传给 {@link DtsValueMapper#rowImageToJson}；0 表示不截断。 */
     private final int maxColumnJsonLength;
@@ -55,41 +59,40 @@ public class DtsRecordConverter {
     /**
      * 将一条 SDK 记录转为 {@link SeaTunnelRow} 或跳过结果。
      *
-     * <p>顺序：操作类型过滤 → 通过 {@link RecordSchema} 元数据做 {@code table-list} 白名单（此时尚未
-     * 构建列 JSON）→ 仅对白名单内 DML 可选构建 {@code _columns_json}。
+     * <p>顺序：操作类型（header）→ 仅用 header 库表做白名单 → 未命中 commit 且不碰 images → 命中后再按需解析
+     * payload 构建 {@code _columns_json}。
      */
-    public ConvertResult convert(DefaultUserRecord record) {
+    public ConvertResult convert(UserRecord record) {
         OperationType operationType = record.getOperationType();
         if (operationType == null) {
             return ConvertResult.skip();
         }
         String op = operationType.name();
         if ("DDL".equals(op)) {
-            LOG.debug("Skip DDL record at offset {}", record.getOffset());
+            LOG.debug("Skip DDL record at offset {}", kafkaOffset(record));
             return ConvertResult.skip();
         }
         if (!"INSERT".equals(op) && !"UPDATE".equals(op) && !"DELETE".equals(op)) {
             return ConvertResult.skip();
         }
 
-        RecordSchema schema = record.getSchema();
-        String database =
-                schema.getDatabaseName().isPresent() ? schema.getDatabaseName().get() : "";
-        String table = schema.getTableName().isPresent() ? schema.getTableName().get() : "";
+        RecordSchema schema = headerSchema(record);
+        String database = headerName(schema == null ? null : schema.getDatabaseName());
+        String table = headerName(schema == null ? null : schema.getTableName());
         if (!isTableAllowed(database, table)) {
-            // 不在白名单：推进位点，不入队、不序列化列 JSON。
+            // 不在白名单：推进位点；禁止碰 fields / images（否则会 decode Avro payload）。
             return ConvertResult.skipAndCommit();
         }
 
-        // INSERT/UPDATE 用 after；DELETE 通常无 after，回退 before（否则 _columns_json 为空）。
-        RowImage image = record.getAfterImage();
-        if (image == null) {
-            image = record.getBeforeImage();
+        String columnsJson = "{}";
+        if (!skipColumnsJson) {
+            // INSERT/UPDATE 用 after；DELETE 通常无 after，回退 before（否则 _columns_json 为空）。
+            RowImage image = record.getAfterImage();
+            if (image == null) {
+                image = record.getBeforeImage();
+            }
+            columnsJson = DtsValueMapper.rowImageToJson(schema, image, maxColumnJsonLength);
         }
-        String columnsJson =
-                skipColumnsJson
-                        ? "{}"
-                        : DtsValueMapper.rowImageToJson(schema, image, maxColumnJsonLength);
 
         Object[] fields =
                 new Object[] {
@@ -97,7 +100,7 @@ public class DtsRecordConverter {
                     table,
                     op,
                     record.getSourceTimestamp(),
-                    record.getOffset(),
+                    kafkaOffset(record),
                     columnsJson
                 };
         SeaTunnelRow row = new SeaTunnelRow(fields);
@@ -105,13 +108,82 @@ public class DtsRecordConverter {
         return ConvertResult.of(row);
     }
 
-    /** 白名单为空，或 {@code database.table}（小写）在白名单内时返回 true。 */
+    /**
+     * 只取 header 侧 schema。{@link LazyParseRecordImpl#getSchema()} 在 schema 为空时会 {@code
+     * initPayload}；此处用 {@code getSchema(false)}，依赖调用方已通过 {@code getOperationType()} 完成 header。
+     */
+    static RecordSchema headerSchema(UserRecord record) {
+        if (record instanceof LazyParseRecordImpl) {
+            return ((LazyParseRecordImpl) record).getSchema(false);
+        }
+        return record.getSchema();
+    }
+
+    static String headerName(
+            com.aliyun.dts.subscribe.clients.common.NullableOptional<String> optional) {
+        if (optional == null || !optional.isPresent()) {
+            return "";
+        }
+        String value = optional.get();
+        return value == null ? "" : value;
+    }
+
+    /**
+     * Kafka offset。{@link UserRecord} 无此方法；懒解析实现是 {@link LazyParseRecordImpl#offset()}（构造即有，不触发
+     * payload），旧实现是 {@link DefaultUserRecord#getOffset()}。
+     */
+    static long kafkaOffset(UserRecord record) {
+        if (record instanceof LazyParseRecordImpl) {
+            return ((LazyParseRecordImpl) record).offset();
+        }
+        if (record instanceof DefaultUserRecord) {
+            return ((DefaultUserRecord) record).getOffset();
+        }
+        return 0L;
+    }
+
+    /**
+     * 白名单为空，或 {@code database.table}（小写）在白名单内时返回 true。
+     *
+     * <p>SQL Server 公开 SDK 会把名字包成 {@code [db]} / {@code [schema].[table]}；匹配时去掉方括号，并同时尝试
+     * {@code db.schema.table} 与 {@code db.table}（末段表名）。
+     */
     boolean isTableAllowed(String database, String table) {
         if (tableWhitelist.isEmpty()) {
             return true;
         }
-        String tableId = (database + "." + table).toLowerCase(Locale.ROOT);
-        return tableWhitelist.contains(tableId);
+        String db = stripSqlServerBrackets(database);
+        String tb = stripSqlServerBrackets(table);
+        if (tb.isEmpty()) {
+            return false;
+        }
+        String fullId = (db + "." + tb).toLowerCase(Locale.ROOT);
+        if (tableWhitelist.contains(fullId)) {
+            return true;
+        }
+        int lastDot = tb.lastIndexOf('.');
+        if (lastDot >= 0 && lastDot < tb.length() - 1) {
+            String shortId = (db + "." + tb.substring(lastDot + 1)).toLowerCase(Locale.ROOT);
+            return tableWhitelist.contains(shortId);
+        }
+        return false;
+    }
+
+    static String stripSqlServerBrackets(String name) {
+        if (name == null || name.isEmpty()) {
+            return "";
+        }
+        if (name.indexOf('[') < 0 && name.indexOf(']') < 0) {
+            return name;
+        }
+        StringBuilder sb = new StringBuilder(name.length());
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c != '[' && c != ']') {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     public static final class ConvertResult {

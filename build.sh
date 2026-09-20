@@ -13,15 +13,15 @@ mvn -q package -DskipTests
 echo "[build] deploy jar -> $SEATUNNEL_HOME/connectors/$ARTIFACT"
 cp "connector-dts/target/${ARTIFACT}" "$SEATUNNEL_HOME/connectors/"
 
-SDK_SRC="$SCRIPT_DIR/../dts-bridge/dts-sdk.jar"
+SDK_SRC="$SCRIPT_DIR/connector-dts/target/dts-sdk.jar"
 SDK_DEST="$SEATUNNEL_HOME/plugins/connector-dts/dts-sdk.jar"
 if [ ! -f "$SDK_SRC" ]; then
-  echo "[build] ERROR: missing DTS SDK: $SDK_SRC"
-  echo "[build] Copy from dev machine dts-bridge/ or set path; SDK cannot be downloaded from public Maven."
+  echo "[build] ERROR: missing DTS SDK fat jar: $SDK_SRC"
+  echo "[build] Expected Maven to copy com.aliyun.dts:dts-new-subscribe-sdk (jar-with-dependencies) during package."
   exit 1
 fi
 
-echo "[build] deploy dts-sdk.jar -> plugins/connector-dts/"
+echo "[build] deploy dts-new-subscribe-sdk fat jar -> plugins/connector-dts/dts-sdk.jar"
 mkdir -p "$SEATUNNEL_HOME/plugins/connector-dts"
 cp "$SDK_SRC" "$SDK_DEST"
 if [ ! -s "$SDK_DEST" ]; then
